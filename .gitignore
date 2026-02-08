@@ -1,0 +1,8 @@
+libasm.a
+*.pdf
+*.md
+
+*.o
+
+test*
+42_libft
