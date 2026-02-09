@@ -1,5 +1,9 @@
 // Simple test runner for libasm mandatory functions
 // Focus: correctness, errno behavior, and libc/libft comparison
+// ------------------------------------------------------------------
+// This file is intentionally verbose and heavily commented.
+// It is designed to be read during defense and extended easily.
+// If you want a minimal test, feel free to strip comments.
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -18,9 +22,14 @@ char *ft_strdup(const char *s);
 #endif
 
 // Minimal test accounting
+// g_total: number of test cases executed
+// g_failed: number of failed test cases
 static int g_total = 0;
 static int g_failed = 0;
 
+// Helper to record and print a single test result.
+// `label` is a human-readable name shown in output.
+// `ok` is non-zero on success, zero on failure.
 static void record_result(const char *label, int ok)
 {
     g_total++;
@@ -36,6 +45,10 @@ static void record_result(const char *label, int ok)
 }
 
 // ---- basic unit tests ----
+// Each test function focuses on one API and includes:
+// - typical cases
+// - edge cases (empty strings, null bytes)
+// - behavior alignment with libc when meaningful
 static void test_strlen(void)
 {
     record_result("ft_strlen(\"abc\") == 3", ft_strlen("abc") == 3);
@@ -44,6 +57,8 @@ static void test_strlen(void)
     record_result("ft_strlen vs strlen", ft_strlen("Hello, World!") == strlen("Hello, World!"));
 }
 
+// Note: strcpy does NOT check bounds; the caller must provide a
+// sufficiently large destination buffer.
 static void test_strcpy(void)
 {
     char dest[64];
@@ -59,6 +74,8 @@ static void test_strcpy(void)
                   strcmp(dest2, "") == 0);
 }
 
+// strcmp returns negative/zero/positive, exact value is not specified.
+// Therefore we only compare the sign when matching libc.
 static void test_strcmp(void)
 {
     record_result("ft_strcmp equal", ft_strcmp("abc", "abc") == 0);
@@ -88,6 +105,10 @@ static void test_strcmp(void)
     }
 }
 
+// write/read tests:
+// - Use pipe() to avoid filesystem side effects.
+// - Validate bytes actually written/read.
+// - Check errno on invalid fd.
 static void test_write(void)
 {
     int fds[2];
@@ -112,6 +133,8 @@ static void test_write(void)
                   ft_write(-1, "x", 1) == -1 && errno == EBADF);
 }
 
+// read tests mirror the write tests.
+// Also verify that zero-length read returns 0.
 static void test_read(void)
 {
     int fds[2];
@@ -142,6 +165,8 @@ static void test_read(void)
                   ft_read(0, buf, 0) == 0);
 }
 
+// strdup should allocate a new buffer and copy the string.
+// Here we only validate contents + non-NULL.
 static void test_strdup(void)
 {
     char *dup = ft_strdup("hello");
@@ -156,6 +181,8 @@ static void test_strdup(void)
 }
 
 // ---- optional comparisons ----
+// Libft comparison is optional and only enabled when
+// compiled with -DUSE_LIBFT_COMPARE.
 #ifdef USE_LIBFT_COMPARE
 static void compare_with_libft(void)
 {
@@ -192,6 +219,9 @@ static void compare_with_libft(void)
 }
 #endif
 
+// Compare libasm behavior with libc equivalents.
+// This covers the same API surface and checks for alignment
+// in return values and error codes.
 static void compare_with_libc(void)
 {
     {
@@ -328,6 +358,8 @@ static void compare_with_libc(void)
     }
 }
 
+// Entry point for test runner.
+// Returns 0 if all tests pass, non-zero otherwise.
 int main(int argc, char **argv)
 {
     (void)argv;
