@@ -53,7 +53,7 @@ clean:
 	$(RM) $(OBJS)
 
 # Remove objects and library
-fclean:
+fclean: clean
 	$(RM) $(NAME)
 
 # Rebuild from scratch
