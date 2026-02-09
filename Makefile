@@ -34,6 +34,7 @@ test: all
 	@./test
 
 # Build libft shared lib and run comparison tests (libft + libc)
+# `git clone https://github.com/KaiMiyazawa/42_libft.git` before running this target
 test_compare: all
 	@cd 42_libft && make CFLAGS="-Wall -Wextra -Werror -fPIC"
 	@cc -shared -o 42_libft/libft.so 42_libft/*.o
@@ -70,3 +71,6 @@ re: fclean all
 #DEFAULT = \033[0m
 
 .PHONY: all clean fclean re bonus test test_compare
+
+# for test
+# `valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./test`

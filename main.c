@@ -17,6 +17,9 @@ int ft_strcmp(const char *s1, const char *s2);
 ssize_t ft_write(int fildes, const void *buf, size_t nbyte);
 ssize_t ft_read(int fildes, void *buf, size_t nbyte);
 char *ft_strdup(const char *s);
+#ifndef FILE_TO_USE
+#define FILE_TO_USE "test.txt"
+#endif
 #ifdef USE_LIBFT_COMPARE
 #include <dlfcn.h>
 #endif
@@ -87,8 +90,9 @@ static void test_strcmp(void)
     {
         int a = ft_strcmp("Hello", "World");
         int b = strcmp("Hello", "World");
-        int sa = (a > 0) - (a < 0);
-        int sb = (b > 0) - (b < 0);
+        // Compare the sign of the result
+        int sa = (a > 0) - (a < 0); // if a>0 then sa=1 else sa=-1
+        int sb = (b > 0) - (b < 0); // if b>0 then sb=1 else sb=-1
         record_result("ft_strcmp vs strcmp (sign)",
                       sa == sb);
     }
@@ -98,10 +102,22 @@ static void test_strcmp(void)
         unsigned char u2[] = {0x00, 0x00};
         unsigned char u3[] = {0xFF, 0x00};
         unsigned char u4[] = {0x01, 0x00};
-        record_result("ft_strcmp non-ASCII 0x80 vs 0x00",
-                      ft_strcmp((char *)u1, (char *)u2) == strcmp((char *)u1, (char *)u2));
-        record_result("ft_strcmp non-ASCII 0xFF vs 0x01",
-                      ft_strcmp((char *)u3, (char *)u4) == strcmp((char *)u3, (char *)u4));
+        {
+            int a = ft_strcmp((char *)u1, (char *)u2);
+            int b = strcmp((char *)u1, (char *)u2);
+            int sa = (a > 0) - (a < 0);
+            int sb = (b > 0) - (b < 0);
+            record_result("ft_strcmp non-ASCII 0x80 vs 0x00",
+                          sa == sb);
+        }
+        {
+            int a = ft_strcmp((char *)u3, (char *)u4);
+            int b = strcmp((char *)u3, (char *)u4);
+            int sa = (a > 0) - (a < 0);
+            int sb = (b > 0) - (b < 0);
+            record_result("ft_strcmp non-ASCII 0xFF vs 0x01",
+                          sa == sb);
+        }
     }
 }
 
@@ -109,7 +125,7 @@ static void test_strcmp(void)
 // - Use pipe() to avoid filesystem side effects.
 // - Validate bytes actually written/read.
 // - Check errno on invalid fd.
-static void test_write(void)
+static void test_write_pipe(void)
 {
     int fds[2];
     char buf[16] = {0};
@@ -133,9 +149,65 @@ static void test_write(void)
                   ft_write(-1, "x", 1) == -1 && errno == EBADF);
 }
 
+// New: file-based write/read test using a configurable filename.
+// The filename can be changed at compile time via -DFILE_TO_USE="\"other.txt\""
+static void test_write_file(void)
+{
+    const char *path = FILE_TO_USE;
+    int fd;
+    char buf[16] = {0};
+
+    // open in append mode so repeated test runs accumulate data
+    fd = open(path, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    record_result("file open for write (append)", fd >= 0);
+    if (fd >= 0)
+    {
+        ssize_t w = ft_write(fd, "abc", 3);
+        record_result("ft_write(file) returns correct length (append)", w == 3);
+        close(fd);
+    }
+
+    // read back the last 3 bytes using libc read to verify append
+    fd = open(path, O_RDONLY);
+    if (fd >= 0)
+    {
+        off_t size = lseek(fd, 0, SEEK_END);
+        if (size == -1)
+        {
+            record_result("read(file) lseek failed", 0);
+            close(fd);
+        }
+        else
+        {
+            off_t start = (size >= 3) ? size - 3 : 0;
+            if (lseek(fd, start, SEEK_SET) == -1)
+            {
+                record_result("read(file) seek to tail failed", 0);
+                close(fd);
+            }
+            else
+            {
+                ssize_t r = read(fd, buf, 3);
+                record_result("read(file) returns correct length (append)", r == 3);
+                record_result("read(file) contents (append)", r == 3 && memcmp(buf, "abc", 3) == 0);
+                close(fd);
+            }
+        }
+    }
+    else
+    {
+        record_result("file open for read (append)", 0);
+    }
+
+    // preserve the file for human inspection (do not unlink)
+    errno = 0;
+    record_result("ft_write invalid fd sets errno (file test)",
+                  ft_write(-1, "x", 1) == -1 && errno == EBADF);
+}
+
 // read tests mirror the write tests.
 // Also verify that zero-length read returns 0.
-static void test_read(void)
+static void test_read_pipe(void)
 {
     int fds[2];
     char buf[16];
@@ -163,6 +235,62 @@ static void test_read(void)
     memset(buf, 0xAA, sizeof(buf));
     record_result("ft_read zero length returns 0",
                   ft_read(0, buf, 0) == 0);
+}
+
+// New: file-based read test using a configurable filename.
+// The filename can be changed at compile time via -DFILE_TO_USE="\"other.txt\""
+static void test_read_file(void)
+{
+    const char *path = FILE_TO_USE;
+    int fd;
+    char buf[16] = {0};
+
+    // open in append mode so repeated test runs accumulate data
+    fd = open(path, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    record_result("file open for write (read test, append)", fd >= 0);
+    if (fd >= 0)
+    {
+        ssize_t w = write(fd, "xyz", 3);
+        record_result("write(file) returns correct length (read test, append)", w == 3);
+        close(fd);
+    }
+
+    // read back the last 3 bytes using ft_read
+    fd = open(path, O_RDONLY);
+    if (fd >= 0)
+    {
+        off_t size = lseek(fd, 0, SEEK_END);
+        if (size == -1)
+        {
+            record_result("ft_read(file) lseek failed (read test)", 0);
+            close(fd);
+        }
+        else
+        {
+            off_t start = (size >= 3) ? size - 3 : 0;
+            if (lseek(fd, start, SEEK_SET) == -1)
+            {
+                record_result("ft_read(file) seek to tail failed (read test)", 0);
+                close(fd);
+            }
+            else
+            {
+                ssize_t r = ft_read(fd, buf, 3);
+                record_result("ft_read(file) returns correct length (read test, append)", r == 3);
+                record_result("ft_read(file) contents (read test, append)", r == 3 && memcmp(buf, "xyz", 3) == 0);
+                close(fd);
+            }
+        }
+    }
+    else
+    {
+        record_result("file open for read (read test, append)", 0);
+    }
+
+    // preserve the file for human inspection (do not unlink)
+    errno = 0;
+    record_result("ft_read invalid fd sets errno (file test)",
+                  ft_read(-1, buf, 1) == -1 && errno == EBADF);
 }
 
 // strdup should allocate a new buffer and copy the string.
@@ -370,8 +498,10 @@ int main(int argc, char **argv)
     test_strlen();
     test_strcpy();
     test_strcmp();
-    test_write();
-    test_read();
+    test_write_pipe();
+    test_write_file();
+    test_read_pipe();
+    test_read_file();
     test_strdup();
 
 #ifdef USE_LIBFT_COMPARE
