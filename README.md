@@ -100,3 +100,21 @@ make test が PIE(Position Independent Executable: プログラムがメモリ�
 なのに __errno_location の呼び方が PIE に合わない relocation になった
 
 wrt ..plt を付けると「外部関数呼び出し＝PLT(Procedure Linkage Table: 外部ライブラリの関数を呼ぶための入り口)経由」になり、PIEでもリンクできる
+
+
+
+## レビューメモ
+- str*
+	- 空の文字列
+	- 非常に長い文字列
+- write
+	- stdoutでft_writeを試す
+	- 開いているファイル記述子でft_writeを試す
+	- 間違ったファイル記述子でft_writeを試す
+	- 戻り値を確認する
+- read
+	- stdinでft_readを試す
+	- 開いているファイル記述子でft_readを試す
+	- 間違ったファイル記述子でft_readを試す
+	- 戻り値を確認する
+

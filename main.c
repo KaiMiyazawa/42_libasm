@@ -30,6 +30,20 @@ char *ft_strdup(const char *s);
 static int g_total = 0;
 static int g_failed = 0;
 
+// Helper to build a long, NUL-terminated string of length len.
+// Returns NULL on allocation failure.
+static char *make_long_string(size_t len, char fill)
+{
+    char *s = (char *)malloc(len + 1);
+    if (!s)
+    {
+        return NULL;
+    }
+    memset(s, (unsigned char)fill, len);
+    s[len] = '\0';
+    return s;
+}
+
 // Helper to record and print a single test result.
 // `label` is a human-readable name shown in output.
 // `ok` is non-zero on success, zero on failure.
@@ -58,6 +72,20 @@ static void test_strlen(void)
     record_result("ft_strlen(\"\") == 0", ft_strlen("") == 0);
     record_result("ft_strlen(\"ab\\0cd\") == 2", ft_strlen("ab\0cd") == 2);
     record_result("ft_strlen vs strlen", ft_strlen("Hello, World!") == strlen("Hello, World!"));
+
+    {
+        size_t len = 100000;
+        char *s = make_long_string(len, 'a');
+        if (!s)
+        {
+            record_result("ft_strlen long string setup", 0);
+        }
+        else
+        {
+            record_result("ft_strlen long string", ft_strlen(s) == len);
+            free(s);
+        }
+    }
 }
 
 // Note: strcpy does NOT check bounds; the caller must provide a
@@ -75,6 +103,23 @@ static void test_strcpy(void)
     ft_strcpy(dest2, "");
     record_result("ft_strcpy empty",
                   strcmp(dest2, "") == 0);
+
+    {
+        size_t len = 100000;
+        char *src = make_long_string(len, 'b');
+        char *dst = (char *)malloc(len + 1);
+        if (!src || !dst)
+        {
+            record_result("ft_strcpy long string setup", 0);
+        }
+        else
+        {
+            record_result("ft_strcpy long string",
+                          ft_strcpy(dst, src) == dst && strcmp(dst, src) == 0);
+        }
+        free(src);
+        free(dst);
+    }
 }
 
 // strcmp returns negative/zero/positive, exact value is not specified.
@@ -119,6 +164,26 @@ static void test_strcmp(void)
                           sa == sb);
         }
     }
+
+    {
+        size_t len = 100000;
+        char *a = make_long_string(len, 'a');
+        char *b = make_long_string(len, 'a');
+        char *c = make_long_string(len, 'a');
+        if (!a || !b || !c)
+        {
+            record_result("ft_strcmp long string setup", 0);
+        }
+        else
+        {
+            c[len - 1] = 'b';
+            record_result("ft_strcmp long string equal", ft_strcmp(a, b) == 0);
+            record_result("ft_strcmp long string diff", ft_strcmp(a, c) < 0);
+        }
+        free(a);
+        free(b);
+        free(c);
+    }
 }
 
 // write/read tests:
@@ -147,6 +212,51 @@ static void test_write_pipe(void)
     errno = 0;
     record_result("ft_write invalid fd sets errno",
                   ft_write(-1, "x", 1) == -1 && errno == EBADF);
+}
+
+// stdout test: redirect stdout to a pipe and verify output.
+static void test_write_stdout(void)
+{
+    int fds[2];
+    int saved_stdout;
+    char buf[8] = {0};
+    ssize_t w = -1;
+    ssize_t r = -1;
+
+    if (pipe(fds) != 0)
+    {
+        record_result("pipe for stdout", 0);
+        return;
+    }
+
+    saved_stdout = dup(STDOUT_FILENO);
+    if (saved_stdout < 0)
+    {
+        record_result("dup stdout", 0);
+        close(fds[0]);
+        close(fds[1]);
+        return;
+    }
+
+    if (dup2(fds[1], STDOUT_FILENO) < 0)
+    {
+        record_result("dup2 stdout", 0);
+        close(saved_stdout);
+        close(fds[0]);
+        close(fds[1]);
+        return;
+    }
+    close(fds[1]);
+
+    w = ft_write(STDOUT_FILENO, "out", 3);
+
+    dup2(saved_stdout, STDOUT_FILENO);
+    close(saved_stdout);
+
+    r = read(fds[0], buf, sizeof(buf));
+    record_result("ft_write stdout returns correct length", w == 3);
+    record_result("ft_write stdout data", r == 3 && memcmp(buf, "out", 3) == 0);
+    close(fds[0]);
 }
 
 // New: file-based write/read test using a configurable filename.
@@ -237,6 +347,49 @@ static void test_read_pipe(void)
                   ft_read(0, buf, 0) == 0);
 }
 
+// stdin test: feed data through a pipe and read via STDIN_FILENO.
+static void test_read_stdin(void)
+{
+    int fds[2];
+    int saved_stdin;
+    char buf[8] = {0};
+
+    if (pipe(fds) != 0)
+    {
+        record_result("pipe for stdin", 0);
+        return;
+    }
+
+    write(fds[1], "in", 2);
+    close(fds[1]);
+
+    saved_stdin = dup(STDIN_FILENO);
+    if (saved_stdin < 0)
+    {
+        record_result("dup stdin", 0);
+        close(fds[0]);
+        return;
+    }
+
+    if (dup2(fds[0], STDIN_FILENO) < 0)
+    {
+        record_result("dup2 stdin", 0);
+        close(saved_stdin);
+        close(fds[0]);
+        return;
+    }
+    close(fds[0]);
+
+    {
+        ssize_t r = ft_read(STDIN_FILENO, buf, sizeof(buf));
+        record_result("ft_read stdin returns correct length", r == 2);
+        record_result("ft_read stdin data", r == 2 && memcmp(buf, "in", 2) == 0);
+    }
+
+    dup2(saved_stdin, STDIN_FILENO);
+    close(saved_stdin);
+}
+
 // New: file-based read test using a configurable filename.
 // The filename can be changed at compile time via -DFILE_TO_USE="\"other.txt\""
 static void test_read_file(void)
@@ -306,6 +459,23 @@ static void test_strdup(void)
     record_result("ft_strdup empty",
                   dup != NULL && strcmp(dup, "") == 0);
     free(dup);
+
+    {
+        size_t len = 100000;
+        char *s = make_long_string(len, 'c');
+        if (!s)
+        {
+            record_result("ft_strdup long string setup", 0);
+        }
+        else
+        {
+            char *d = ft_strdup(s);
+            record_result("ft_strdup long string",
+                          d != NULL && strcmp(d, s) == 0);
+            free(d);
+            free(s);
+        }
+    }
 }
 
 // ---- optional comparisons ----
@@ -499,8 +669,10 @@ int main(int argc, char **argv)
     test_strcpy();
     test_strcmp();
     test_write_pipe();
+    test_write_stdout();
     test_write_file();
     test_read_pipe();
+    test_read_stdin();
     test_read_file();
     test_strdup();
 
