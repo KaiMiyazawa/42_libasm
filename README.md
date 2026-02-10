@@ -3,6 +3,8 @@
 [![42 School Project](https://img.shields.io/badge/42-Project-blue)](https://www.42.fr/)
 [![Language](https://img.shields.io/badge/language-x86--64%20Assembly-orange)](https://www.nasm.us/)
 
+> [日本語版のREADMEはこちら / Japanese README](README_ja.md)
+
 A comprehensive implementation of essential C standard library functions in x86-64 assembly language (NASM syntax). This project demonstrates low-level programming skills, deep understanding of system architecture, and adherence to calling conventions.
 
 ---
